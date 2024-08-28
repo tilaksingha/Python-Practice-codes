@@ -1,80 +1,133 @@
 import tkinter as tk
-from tkinter import ttk
-from translate import Translator
+import random
+import time
 
-# Function to perform translation
-def translate_text():
-    source_text = text_input.get("1.0", tk.END)
-    src_lang = source_lang_var.get()
-    dest_lang = dest_lang_var.get()
+class AviatorGame:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Aviator Game Simulation")
+        self.root.configure(bg='black')
+
+        # Initial balance
+        self.balance = 100000
+        self.history = []
+
+        # Set up GUI elements
+        self.setup_ui()
     
-    try:
-        translator = Translator(from_lang=src_lang, to_lang=dest_lang)
-        translation = translator.translate(source_text)
-        text_output.delete("1.0", tk.END)
-        text_output.insert(tk.END, translation)
-    except Exception as e:
-        text_output.delete("1.0", tk.END)
-        text_output.insert(tk.END, f"Error: {e}")
+    def setup_ui(self):
+        self.canvas = tk.Canvas(self.root, width=800, height=600, bg='black')
+        self.canvas.pack()
 
-# Function to switch languages
-def switch_languages():
-    current_src_lang = source_lang_var.get()
-    current_dest_lang = dest_lang_var.get()
-    source_lang_var.set(current_dest_lang)
-    dest_lang_var.set(current_src_lang)
+        # Plane emoji as a placeholder
+        self.plane_emoji = "✈️"
+        self.plane = self.canvas.create_text(50, 300, text=self.plane_emoji, font=("Arial", 24), fill="red")
 
-# Create the main application window
-root = tk.Tk()
-root.title("Offline Translator")
-root.geometry("600x400")
+        self.balance_label = tk.Label(self.root, text=f"Balance: ₹{self.balance}", font=("Arial", 16), fg='red', bg='black')
+        self.balance_label.pack(pady=10)
 
-# Source Text
-text_input_label = tk.Label(root, text="Enter text to translate:")
-text_input_label.pack(pady=5)
+        self.bet_amount_label = tk.Label(self.root, text="Bet Amount:", font=("Arial", 12), fg='red', bg='black')
+        self.bet_amount_label.pack()
 
-text_input = tk.Text(root, height=6, width=50)
-text_input.pack(pady=5)
+        self.bet_amount_entry = tk.Entry(self.root)
+        self.bet_amount_entry.pack(pady=5)
 
-# Source Language
-src_lang_frame = tk.Frame(root)
-src_lang_frame.pack(pady=5)
+        self.multiplier_label = tk.Label(self.root, text="Target Multiplier (Auto):", font=("Arial", 12), fg='red', bg='black')
+        self.multiplier_label.pack()
 
-src_lang_label = tk.Label(src_lang_frame, text="Source Language:")
-src_lang_label.pack(side=tk.LEFT)
+        self.multiplier_entry = tk.Entry(self.root)
+        self.multiplier_entry.pack(pady=5)
 
-source_lang_var = tk.StringVar(value="en")
+        self.normal_bet_button = tk.Button(self.root, text="Place Normal Bet", command=self.place_normal_bet, bg='red', fg='black')
+        self.normal_bet_button.pack(pady=5)
 
-# Radio buttons for language selection
-languages = {'English': 'en', 'Spanish': 'es', 'French': 'fr', 'German': 'de', 'Hindi': 'hi'}
-source_lang_menu = ttk.OptionMenu(src_lang_frame, source_lang_var, *languages.keys())
-source_lang_menu.pack(side=tk.LEFT)
+        self.auto_bet_button = tk.Button(self.root, text="Start Auto Bet", command=self.start_auto_bet, bg='red', fg='black')
+        self.auto_bet_button.pack(pady=5)
 
-# Reverse Button
-reverse_button = tk.Button(root, text="Reverse", command=switch_languages)
-reverse_button.pack(pady=5)
+        self.result_label = tk.Label(self.root, text="", font=("Arial", 14), fg='red', bg='black')
+        self.result_label.pack(pady=10)
 
-# Destination Language
-dest_lang_frame = tk.Frame(root)
-dest_lang_frame.pack(pady=5)
+        self.history_label = tk.Label(self.root, text="Last 50 Outputs:", font=("Arial", 12), fg='red', bg='black')
+        self.history_label.pack()
 
-dest_lang_label = tk.Label(dest_lang_frame, text="Destination Language:")
-dest_lang_label.pack(side=tk.LEFT)
+        self.history_text = tk.Text(self.root, height=10, width=50)
+        self.history_text.pack(pady=5)
 
-dest_lang_var = tk.StringVar(value="es")
-dest_lang_menu = ttk.OptionMenu(dest_lang_frame, dest_lang_var, *languages.keys())
-dest_lang_menu.pack(side=tk.LEFT)
+        self.watermark = tk.Label(self.root, text="Made by Tilak Singha, ECE, TINT", font=("Arial", 10), fg='red', bg='black')
+        self.watermark.place(x=600, y=550)
 
-# Translate Button
-translate_button = tk.Button(root, text="Translate", command=translate_text)
-translate_button.pack(pady=5)
+    def place_normal_bet(self):
+        bet_amount = self.get_bet_amount()
+        if bet_amount is None or bet_amount > self.balance:
+            self.result_label.config(text="Invalid bet amount or insufficient balance.")
+            return
 
-# Output Text
-text_output_label = tk.Label(root, text="Translated text:")
-text_output_label.pack(pady=5)
+        self.canvas.delete("all")
+        self.canvas.create_text(50, 300, text=self.plane_emoji, font=("Arial", 24), fill="red")
 
-text_output = tk.Text(root, height=6, width=50)
-text_output.pack(pady=5)
+        multiplier = self.simulate_game()
+        self.update_balance(bet_amount, multiplier)
+        self.add_to_history(bet_amount, multiplier)
 
-# Run the application
-root.mainloop()
+        self.show_result(multiplier)
+        
+    def start_auto_bet(self):
+        bet_amount = self.get_bet_amount()
+        target_multiplier = self.get_target_multiplier()
+        if bet_amount is None or target_multiplier is None or bet_amount > self.balance:
+            self.result_label.config(text="Invalid input or insufficient balance.")
+            return
+        
+        while self.balance >= bet_amount:
+            self.canvas.delete("all")
+            self.canvas.create_text(50, 300, text=self.plane_emoji, font=("Arial", 24), fill="red")
+
+            multiplier = self.simulate_game()
+            if multiplier >= target_multiplier:
+                self.update_balance(bet_amount, multiplier)
+                self.result_label.config(text=f"Auto Bet Won! Multiplier: {multiplier}")
+                self.show_result(multiplier)
+                break
+            time.sleep(10)  # Wait for 10 seconds before the next auto bet
+
+    def simulate_game(self):
+        # Simulate the game. This function returns a random multiplier.
+        return round(random.uniform(1.0, 5.0), 2)
+
+    def update_balance(self, bet_amount, multiplier):
+        if multiplier > 1:
+            win_amount = bet_amount * multiplier
+            self.balance += win_amount - bet_amount
+        else:
+            self.balance -= bet_amount
+
+        self.balance_label.config(text=f"Balance: ₹{self.balance}")
+
+    def add_to_history(self, bet_amount, multiplier):
+        self.history.append((bet_amount, multiplier))
+        if len(self.history) > 50:
+            self.history.pop(0)
+
+        self.history_text.delete(1.0, tk.END)
+        for bet, mult in self.history:
+            self.history_text.insert(tk.END, f"Bet: ₹{bet} | Multiplier: {mult}\n")
+
+    def show_result(self, multiplier):
+        self.canvas.create_text(400, 300, text=f"Flew Away! Multiplier: {multiplier}", fill="red", font=("Arial", 24))
+
+    def get_bet_amount(self):
+        try:
+            return float(self.bet_amount_entry.get())
+        except ValueError:
+            return None
+
+    def get_target_multiplier(self):
+        try:
+            return float(self.multiplier_entry.get())
+        except ValueError:
+            return None
+
+if __name__ == "__main__":
+    root = tk.Tk()
+    game = AviatorGame(root)
+    root.mainloop()
